@@ -1,0 +1,33 @@
+.DS_Store
+basil.sublime-workspace
+*.idlk
+tmp/*
+
+# Test files
+test/download/data/
+test/download/lib/
+test/download/basil.js
+test/loop/basil.js
+test/loop/lib/
+
+# User directories
+.vscode/
+libraries/
+plugins/
+sketches/
+
+# Dependency directories
+node_modules/
+# Logs
+*.log
+npm-debug.log*
+
+# Optional npm cache directory
+.npm
+# Optional REPL history
+.node_repl_history
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock

@@ -1,0 +1,10 @@
+// @include "color-tests.jsx";
+// @include "data-tests.jsx";
+// @include "document-tests.jsx";
+// @include "environment-tests.jsx";
+// @include "group-tests.jsx";
+// @include "input-tests.jsx";
+// @include "math-tests.jsx";
+// @include "string-tests.jsx";
+// @include "transform-tests.jsx";
+// @include "typography-tests.jsx";
