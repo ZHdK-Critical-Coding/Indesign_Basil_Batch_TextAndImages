@@ -2,10 +2,11 @@
 
 [Deutsch](README_DE.md)
 
-An InDesign script that turns every folder in `source/` into its own PDF:
-the text from `text.txt` on the first page, followed by every image in the
-folder on a page of its own. For each folder it creates a new document,
-fills it, exports the PDF and closes the document again – a batch run
+An InDesign script that turns all folders in `source/` into one PDF:
+every folder starts on a new page with the text from `text.txt`, followed
+by every image in the folder on a page of its own. It creates a new
+document, fills it folder by folder, exports the PDF and closes the
+document again – a batch run
 instead of layouting by hand. Written with
 [basil.js](https://basiljs2.netlify.app), a library that brings the spirit
 of Processing to InDesign.
@@ -42,7 +43,7 @@ All functions: [basil.js reference](https://basiljs2.netlify.app/reference/).
 
 ## How to Run
 
-The source material lies in `source/`, one folder per document:
+The source material lies in `source/`, one folder per section:
 
 ```
 source/
@@ -55,12 +56,13 @@ source/
 ```
 
 Double-click `batch_pdf.jsx` in the Scripts panel and choose the `source`
-folder. The script creates `output/glacier.pdf`, `output/harbour.pdf` …
-(A4, 20 mm margins) in a folder `output` next to `source`, and reports how
-many PDFs it saved. Existing PDFs are overwritten. Replace the folders in
+folder. The script creates `output/document.pdf` (A4, 20 mm
+margins, folders in alphabetical order) in a folder `output` next to
+`source`, and reports how many folders it saved. An existing PDF is
+overwritten. Replace the folders in
 `source/` with your own material and run it again.
 
-The documents open and close while the script runs; don't click into
+The document opens and closes while the script runs; don't click into
 InDesign until the message appears.
 
 ## Coding Help
@@ -73,14 +75,18 @@ basil calls both automatically once the library is included.
   in `sourceFolder`.
 - **`draw()`**: creates the `output` folder next to it, sets
   `app.pdfExportPreferences.pageRange` to all pages (otherwise InDesign
-  reuses the page range of the last export), lists the subfolders with
-  `getFiles()` and calls `createPDF()` for each of them.
-- **`createPDF()` → document**: `app.documents.add()` creates a new
+  reuses the page range of the last export), lists the subfolders with `getFiles()`, creates the document and calls
+  `addItem()` for each folder. At the end it exports and closes the
+  document.
+- **`draw()` → document**: `app.documents.add()` creates a new
   document; A4 and single pages are set in `documentPreferences`. `doc(d)`
   tells basil to work with this document, `units(MM)` switches all
   coordinates to millimetres. `pageMargin` at the top of the script sets
   the margin.
-- **`createPDF()` → text**: `readParagraphs()` reads `text.txt` as UTF-8
+- **`nextPage()`**: uses page 1 for the first content and appends a new
+  page with `addPage()` for everything after it, so every folder and every
+  image starts on a page of its own.
+- **`addItem()` → text**: `readParagraphs()` reads `text.txt` as UTF-8
   and joins its lines into paragraphs. In InDesign, `\r` separates
   paragraphs. `text()` creates the frame; font and size come from
   `textFont()` and `textSize()`. They are also applied to `parentStory`,
@@ -88,13 +94,12 @@ basil calls both automatically once the library is included.
   paragraph is the title: 24 pt bold. While the frame `overflows`, the
   script adds a page with `addPage()`, creates a new frame and links it
   with `nextTextFrame`, so long texts continue on the following pages.
-- **`createPDF()` → images**: for every image (`jpg`, `jpeg`, `png`,
-  `tif`), `addPage()` appends a page and `rect()` draws a frame inside the
+- **`addItem()` → images**: for every image (`jpg`, `jpeg`, `png`,
+  `tif`), `nextPage()` starts a page and `rect()` draws a frame inside the
   margins (without fill and stroke, see `noFill()` / `noStroke()`). The
   image is placed with `place()` and fitted with
   `FitOptions.PROPORTIONALLY` and `FitOptions.CENTER_CONTENT`. Use
   `FitOptions.FILL_PROPORTIONALLY` to fill the area instead.
-- **`createPDF()` → export**: `savePDF()` exports with the last used PDF
+- **`draw()` → export**: `savePDF()` exports with the last used PDF
   settings (by default *High Quality Print*), `close(false)` closes the
-  document without saving an `.indd` file. To keep the InDesign files as
-  well, save them with `d.save(new File(...))` before closing.
+  document without saving an `.indd` file. To keep the InDesign file as well, save it with `d.save(new File(...))` before closing.

@@ -1,12 +1,13 @@
 // @includepath "~/Documents/;%USERPROFILE%Documents";
 // @include "basiljs/basil.js";
 
-// Creates one PDF per folder in source/:
-// page 1 shows text.txt, every image follows on its own page.
-// The PDFs are saved in output/ next to the source folder.
+// Creates one PDF with all folders in source/: every folder starts
+// on a new page with its text.txt, every image follows on its own page.
+// The PDF is saved as output/document.pdf next to the source folder.
 
 var pageMargin = 20; // mm
 var sourceFolder;
+var pageUsed;      // false until something is placed on page 1
 
 function setup() {
     sourceFolder = Folder.selectDialog("Select the source folder");
@@ -30,15 +31,7 @@ function draw() {
     });
     itemFolders.sort(byName);
 
-    for (var i = 0; i < itemFolders.length; i++) {
-        createPDF(itemFolders[i], outputFolder);
-    }
-
-    alert(itemFolders.length + " PDF(s) saved in\n" + outputFolder.fsName);
-}
-
-// One InDesign document for one folder: build it, export it, close it
-function createPDF(itemFolder, outputFolder) {
+    // one InDesign document for all folders: build it, export it, close it
     var d = app.documents.add();
     d.documentPreferences.properties = {
         facingPages: false,
@@ -47,14 +40,35 @@ function createPDF(itemFolder, outputFolder) {
     };
     doc(d);      // basil now works with this document
     units(MM);
+    pageUsed = false;
 
-    var pageBounds = bounds(page(1));
+    for (var i = 0; i < itemFolders.length; i++) {
+        addItem(itemFolders[i]);
+    }
+
+    var pdf = new File(outputFolder.fsName + "/document.pdf");
+    savePDF(pdf);
+    close(false); // close without saving the .indd
+
+    alert(itemFolders.length + " folder(s) saved in\n" + pdf.fsName);
+}
+
+// Page 1 for the first content, a new page for everything after it
+function nextPage() {
+    if (pageUsed) addPage();
+    pageUsed = true;
+}
+
+// One folder: a new page with the text, then one page per image
+function addItem(itemFolder) {
+    var pageBounds = bounds(page());
     var w = pageBounds.width - 2 * pageMargin;
     var h = pageBounds.height - 2 * pageMargin;
 
-    // ---- page 1: the text ----
+    // ---- the text ----
     var textFile = new File(itemFolder.fsName + "/text.txt");
     if (textFile.exists) {
+        nextPage();
         textFont("Arial", "Regular");
         textSize(11);
 
@@ -94,15 +108,12 @@ function createPDF(itemFolder, outputFolder) {
     noFill();
     noStroke();
     for (var i = 0; i < images.length; i++) {
-        addPage();
+        nextPage();
         var r = rect(pageMargin, pageMargin, w, h);
         r.place(images[i]);
         r.fit(FitOptions.PROPORTIONALLY);
         r.fit(FitOptions.CENTER_CONTENT);
     }
-
-    savePDF(new File(outputFolder.fsName + "/" + itemFolder.name + ".pdf"));
-    close(false); // close without saving the .indd
 }
 
 // Reads a UTF-8 text file. Lines are joined into paragraphs,
