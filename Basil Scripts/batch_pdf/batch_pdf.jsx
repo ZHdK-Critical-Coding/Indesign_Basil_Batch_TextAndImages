@@ -7,10 +7,10 @@
 
 var pageMargin = 20; // mm
 var sourceFolder;
-var pageUsed;      // false until something is placed on page 1
+var pageUsed;        // false until something is placed on page 1
 
 function setup() {
-    sourceFolder = Folder.selectDialog("Select the source folder");
+    sourceFolder = selectFolder({prompt: "Select the source folder"});
 }
 
 function draw() {
@@ -19,123 +19,116 @@ function draw() {
         return;
     }
 
-    var outputFolder = new Folder(sourceFolder.parent.fsName + "/output");
-    outputFolder.create();
-
     // export all pages, regardless of what was used last time
     app.pdfExportPreferences.pageRange = PageRange.ALL_PAGES;
 
-    // every subfolder is one item
-    var itemFolders = sourceFolder.getFiles(function(file) {
-        return file instanceof Folder;
-    });
-    itemFolders.sort(byName);
-
-    // one InDesign document for all folders: build it, export it, close it
-    var d = app.documents.add();
-    d.documentPreferences.properties = {
-        facingPages: false,
-        pageWidth: "210mm",
-        pageHeight: "297mm"
-    };
-    doc(d);      // basil now works with this document
+    // a new single-page A4 document; basil works with it from now on
+    doc(app.documents.add({documentPreferences: {facingPages: false}}));
     units(MM);
+    size(210, 297);
     pageUsed = false;
 
-    for (var i = 0; i < itemFolders.length; i++) {
-        addItem(itemFolders[i]);
-    }
+    // every subfolder is one item, sorted by name
+    var itemFolders = sourceFolder.getFiles(function(f) {
+        return f instanceof Folder;
+    });
+    itemFolders.sort(byName);
+    forEach(itemFolders, addItem);
 
-    var pdf = new File(outputFolder.fsName + "/document.pdf");
+    // savePDF() creates the output folder if needed
+    var pdf = file(sourceFolder.parent.absoluteURI + "/output/document.pdf");
     savePDF(pdf);
-    close(false); // close without saving the .indd
 
+    println(itemFolders.length + " folder(s) saved in " + pdf.fsName);
     alert(itemFolders.length + " folder(s) saved in\n" + pdf.fsName);
 }
 
-// Page 1 for the first content, a new page for everything after it
-function nextPage() {
+// Page 1 for the first content, a new page for everything after it.
+// The canvas is the area inside the margins: (0, 0) is the top left
+// margin corner, width and height are the size of that area.
+function startPage() {
     if (pageUsed) addPage();
     pageUsed = true;
+    margins(pageMargin);
+    canvasMode(MARGIN);
 }
 
 // One folder: a new page with the text, then one page per image
 function addItem(itemFolder) {
-    var pageBounds = bounds(page());
-    var w = pageBounds.width - 2 * pageMargin;
-    var h = pageBounds.height - 2 * pageMargin;
 
     // ---- the text ----
-    var textFile = new File(itemFolder.fsName + "/text.txt");
+    var textFile = file(itemFolder.absoluteURI + "/text.txt");
     if (textFile.exists) {
-        nextPage();
+        startPage();
+
+        // text() colours the text with the current fill –
+        // set it every time, the image frames below switch it off
+        fill(0);
+        noStroke();
         textFont("Arial", "Regular");
         textSize(11);
+        textAlign(Justification.LEFT_JUSTIFIED);
 
-        var frame = text(readParagraphs(textFile).join("\r"), pageMargin, pageMargin, w, h);
+        var frame = text(join(readParagraphs(textFile), "\r"), 0, 0, width, height);
 
         // basil formats only the text that fits into the frame,
         // so the whole story (including overset text) is formatted here
-        var story = frame.parentStory;
-        story.appliedFont = textFont();
-        story.pointSize = textSize();
-        story.spaceAfter = 2;
-        story.justification = Justification.LEFT_JUSTIFIED;
+        typo(frame.parentStory, {
+            appliedFont: textFont(),
+            pointSize: textSize(),
+            justification: Justification.LEFT_JUSTIFIED,
+            spaceAfter: 2
+        });
 
         // the first paragraph is the title
-        var title = frame.paragraphs[0];
-        title.pointSize = 24;
-        title.fontStyle = "Bold";
-        title.justification = Justification.LEFT_ALIGN;
-        title.spaceAfter = 8;
+        typo(paragraphs(frame)[0], {
+            pointSize: 24,
+            fontStyle: "Bold",
+            justification: Justification.CENTER_ALIGN,
+            spaceAfter: 8
+        });
 
         // too much text for one page: add pages and thread the frames
         while (frame.overflows) {
-            addPage();
-            var next = text("", pageMargin, pageMargin, w, h);
-            frame.nextTextFrame = next;
+            startPage();
+            var next = text("", 0, 0, width, height);
+            linkTextFrames(frame, next);
             frame = next;
-            story.recompose();
         }
     }
 
     // ---- one page per image ----
-    var images = itemFolder.getFiles(function(file) {
-        return file instanceof File && /\.(jpg|jpeg|png|tif|tiff)$/i.test(file.name);
-    });
+    var images = files(itemFolder, {filter: ["jpg", "jpeg", "png", "tif", "tiff"]});
     images.sort(byName);
 
-    noFill();
-    noStroke();
-    for (var i = 0; i < images.length; i++) {
-        nextPage();
-        var r = rect(pageMargin, pageMargin, w, h);
-        r.place(images[i]);
-        r.fit(FitOptions.PROPORTIONALLY);
-        r.fit(FitOptions.CENTER_CONTENT);
-    }
+    forEach(images, function(img) {
+        startPage();
+        noFill();
+        noStroke();
+        // image() fills the frame and crops the image;
+        // fit it again so the whole image is visible
+        var imageFrame = image(img, rect(0, 0, width, height));
+        imageFrame.fit(FitOptions.PROPORTIONALLY);
+        imageFrame.fit(FitOptions.CENTER_CONTENT);
+    });
 }
 
-// Reads a UTF-8 text file. Lines are joined into paragraphs,
-// an empty line starts a new paragraph.
-function readParagraphs(file) {
-    file.encoding = "UTF-8";
-    file.open("r");
-    var lines = file.read().split(/\r\n|\r|\n/);
-    file.close();
-
-    var paragraphs = [];
+// Reads a UTF-8 text file with loadStrings(). Lines are joined
+// into paragraphs, an empty line starts a new paragraph.
+function readParagraphs(f) {
+    f.encoding = "UTF-8"; // loadStrings() keeps the encoding of the File
+    var result = [];
     var current = [];
-    for (var i = 0; i < lines.length; i++) {
-        if (/^\s*$/.test(lines[i])) {
-            if (current.length) paragraphs.push(current.join(" "));
+    forEach(loadStrings(f), function(line) {
+        if (trim(line) === "") {
+            if (current.length) result.push(join(current, " "));
             current = [];
         } else {
-            current.push(lines[i]);
+            current.push(trim(line));
         }
-    }
-    if (current.length) paragraphs.push(current.join(" "));
-    return paragraphs;
+    });
+    if (current.length) result.push(join(current, " "));
+    return result;
 }
 
 function byName(a, b) {
